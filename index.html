@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carta Gantt Interactiva - Proyecto Synkro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Color de fondo gris claro */
+        }
+        /* Estilos para la barra de desplazamiento */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .gantt-grid {
+            grid-template-columns: 250px 1fr;
+        }
+        /* Animación para el modal */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .modal-exit {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .modal-exit-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 300ms, transform 300ms;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <div id="app" class="container mx-auto p-4 sm:p-6 md:p-8">
+        
+        <!-- Encabezado del Proyecto -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Proyecto Synkro</h1>
+            <p class="mt-2 text-lg text-gray-600">Optimizando la Comunicación Docente con IA para Maximizar el Tiempo Pedagógico</p>
+        </header>
+
+        <!-- Contenedor Principal de la Carta Gantt -->
+        <main class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-semibold text-gray-800">Cronograma de Implementación</h2>
+                <p class="mt-1 text-gray-500">Visualización interactiva de las fases y tareas del proyecto.</p>
+            </div>
+
+            <!-- Leyenda de Colores -->
+            <div id="legend" class="p-4 sm:p-6 flex flex-wrap gap-4 border-b border-gray-200 bg-gray-50"></div>
+
+            <!-- Estructura de la Carta Gantt -->
+            <div class="overflow-x-auto">
+                <div id="gantt-chart" class="min-w-[1200px]">
+                    <!-- Cabecera de Meses (se genera con JS) -->
+                    <div class="sticky top-0 z-10 grid gantt-grid bg-gray-100 border-b-2 border-gray-300">
+                        <div class="p-4 font-semibold border-r border-gray-300">Fases y Tareas</div>
+                        <div id="timeline-header" class="grid grid-cols-11"></div>
+                    </div>
+                    <!-- Contenido de la Gantt (se genera con JS) -->
+                    <div id="gantt-content"></div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>&copy; 2025 Proyecto Synkro - Colegio Cree Cerro Navia</p>
+        </footer>
+    </div>
+
+    <!-- Modal para Detalles de Tarea -->
+    <div id="task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b">
+                <div class="flex justify-between items-start">
+                    <h3 id="modal-title" class="text-2xl font-bold text-gray-900"></h3>
+                    <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p id="modal-phase" class="text-sm font-medium text-indigo-600 mt-1"></p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <h4 class="font-semibold text-gray-700">Descripción</h4>
+                    <p id="modal-description" class="text-gray-600 mt-1"></p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-700">Responsables</h4>
+                    <p id="modal-responsibles" class="text-gray-600 mt-1"></p>
+                </div>
+                 <div>
+                    <h4 class="font-semibold text-gray-700">Duración</h4>
+                    <p id="modal-duration" class="text-gray-600 mt-1"></p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-700">Estado</h4>
+                    <span id="modal-status" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- DATOS DEL PROYECTO ---
+            const projectData = [
+                {
+                    phase: 'Fase 1: Planificación y Diseño',
+                    color: 'bg-sky-500',
+                    tasks: [
+                        { name: 'Definición de requerimientos detallados', start: '2025-09-01', end: '2025-09-15', responsibles: 'Docente líder, Docentes colaboradores', description: 'Analizar y documentar las necesidades específicas de los usuarios para la aplicación.', status: 'Pendiente' },
+                        { name: 'Diseño de la interfaz de usuario (UI/UX)', start: '2025-09-16', end: '2025-10-10', responsibles: 'Docente líder, Soporte tecnológico', description: 'Crear los mockups y prototipos de la aplicación web y móvil, enfocándose en la usabilidad.', status: 'Pendiente' },
+                        { name: 'Selección de herramientas y tecnologías de IA', start: '2025-10-11', end: '2025-10-20', responsibles: 'Soporte tecnológico', description: 'Investigar y seleccionar las mejores tecnologías para PLN, TTS y STT.', status: 'Pendiente' },
+                        { name: 'Configuración del entorno de desarrollo', start: '2025-10-21', end: '2025-10-31', responsibles: 'Soporte tecnológico', description: 'Preparar los servidores, bases de datos y herramientas necesarias para el desarrollo.', status: 'Pendiente' },
+                    ],
+                },
+                {
+                    phase: 'Fase 2: Desarrollo e Implementación',
+                    color: 'bg-teal-500',
+                    tasks: [
+                        { name: 'Desarrollo del backend y APIs', start: '2025-11-01', end: '2025-11-30', responsibles: 'Soporte tecnológico', description: 'Construir la lógica del servidor y los puntos de conexión (APIs) para la aplicación.', status: 'Pendiente' },
+                        { name: 'Desarrollo del frontend (Web y Móvil)', start: '2025-11-15', end: '2025-12-20', responsibles: 'Soporte tecnológico', description: 'Crear la interfaz visible para el usuario final en navegadores y dispositivos móviles.', status: 'Pendiente' },
+                        { name: 'Integración de los modelos de IA', start: '2025-12-21', end: '2026-01-15', responsibles: 'Soporte tecnológico', description: 'Conectar la aplicación con los servicios de inteligencia artificial seleccionados.', status: 'Pendiente' },
+                        { name: 'Desarrollo de funcionalidades clave', start: '2026-01-01', end: '2026-01-31', responsibles: 'Soporte tecnológico, Docente líder', description: 'Implementar las funciones de resúmenes, podcasts, quizzes y transcripciones automáticas.', status: 'Pendiente' },
+                    ],
+                },
+                {
+                    phase: 'Fase 3: Pruebas y Capacitación',
+                    color: 'bg-amber-500',
+                    tasks: [
+                        { name: 'Pruebas internas y depuración de errores', start: '2026-02-01', end: '2026-02-15', responsibles: 'Soporte tecnológico, Docentes colaboradores', description: 'Realizar pruebas exhaustivas para encontrar y corregir errores en la aplicación.', status: 'Pendiente' },
+                        { name: 'Diseño de material de capacitación', start: '2026-02-10', end: '2026-02-20', responsibles: 'Docente líder', description: 'Crear manuales, videos y guías para enseñar a usar la herramienta.', status: 'Pendiente' },
+                        { name: 'Capacitación inicial a equipos piloto', start: '2026-02-21', end: '2026-02-28', responsibles: 'Docente líder', description: 'Realizar talleres prácticos con los primeros usuarios de la aplicación.', status: 'Pendiente' },
+                    ],
+                },
+                {
+                    phase: 'Fase 4: Piloto y Retroalimentación',
+                    color: 'bg-indigo-500',
+                    tasks: [
+                        { name: 'Implementación del piloto en reuniones de área', start: '2026-03-01', end: '2026-04-15', responsibles: 'Docentes colaboradores', description: 'Utilizar Synkro en un entorno real y controlado para evaluar su funcionamiento.', status: 'Pendiente' },
+                        { name: 'Recolección de feedback de usabilidad', start: '2026-03-01', end: '2026-04-30', responsibles: 'Docente líder', description: 'Recopilar opiniones y sugerencias de los usuarios piloto a través de encuestas y entrevistas.', status: 'Pendiente' },
+                        { name: 'Ajustes y mejoras basados en feedback', start: '2026-04-16', end: '2026-04-30', responsibles: 'Soporte tecnológico, Docente líder', description: 'Implementar cambios y mejoras en la aplicación basados en la retroalimentación recibida.', status: 'Pendiente' },
+                    ],
+                },
+                {
+                    phase: 'Fase 5: Despliegue y Expansión',
+                    color: 'bg-rose-500',
+                    tasks: [
+                        { name: 'Extensión progresiva a otras instancias', start: '2026-05-01', end: '2026-06-15', responsibles: 'Docente líder', description: 'Ampliar el uso de Synkro a más equipos y tipos de reuniones dentro del colegio.', status: 'Pendiente' },
+                        { name: 'Incorporación de transcripción en reuniones formales', start: '2026-05-15', end: '2026-06-30', responsibles: 'Soporte tecnológico, Docentes colaboradores', description: 'Activar y utilizar la funcionalidad de actas automáticas en todas las reuniones oficiales.', status: 'Pendiente' },
+                        { name: 'Monitoreo continuo del rendimiento', start: '2026-05-01', end: '2026-06-30', responsibles: 'Soporte tecnológico', description: 'Vigilar el funcionamiento técnico de la plataforma y el uso por parte de los docentes.', status: 'Pendiente' },
+                    ],
+                },
+                {
+                    phase: 'Fase 6: Evaluación y Sostenibilidad',
+                    color: 'bg-emerald-500',
+                    tasks: [
+                        { name: 'Evaluación de impacto (métricas)', start: '2026-07-01', end: '2026-07-15', responsibles: 'Docente líder', description: 'Medir la reducción de horas de reunión y el nivel de satisfacción de los usuarios.', status: 'Pendiente' },
+                        { name: 'Análisis de resultados y reporte final', start: '2026-07-16', end: '2026-07-31', responsibles: 'Docente líder', description: 'Consolidar los datos y preparar un informe final con los resultados y aprendizajes del proyecto.', status: 'Pendiente' },
+                        { name: 'Planificación de mejoras futuras', start: '2026-07-20', end: '2026-07-31', responsibles: 'Docente líder, Soporte tecnológico', description: 'Definir los próximos pasos para la sostenibilidad y evolución de la herramienta Synkro.', status: 'Pendiente' },
+                    ],
+                }
+            ];
+
+            // --- CONFIGURACIÓN DE LA LÍNEA DE TIEMPO ---
+            const startDate = new Date('2025-09-01');
+            const endDate = new Date('2026-07-31');
+            const months = ['Sep 25', 'Oct 25', 'Nov 25', 'Dic 25', 'Ene 26', 'Feb 26', 'Mar 26', 'Abr 26', 'May 26', 'Jun 26', 'Jul 26'];
+            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+
+            const ganttContent = document.getElementById('gantt-content');
+            const timelineHeader = document.getElementById('timeline-header');
+            const legendContainer = document.getElementById('legend');
+            const modal = document.getElementById('task-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+
+            // --- FUNCIONES DE RENDERIZADO ---
+
+            function renderTimeline() {
+                timelineHeader.innerHTML = months.map(month => `<div class="text-center p-2 font-medium text-sm text-gray-600 border-r border-gray-300">${month}</div>`).join('');
+            }
+
+            function renderGantt() {
+                projectData.forEach(phase => {
+                    // Renderizar la fila de la fase
+                    const phaseRow = document.createElement('div');
+                    phaseRow.className = 'grid gantt-grid font-semibold text-white';
+                    phaseRow.innerHTML = `
+                        <div class="p-3 border-r border-gray-700 ${phase.color} flex items-center">${phase.phase}</div>
+                        <div class="${phase.color} opacity-30"></div>
+                    `;
+                    ganttContent.appendChild(phaseRow);
+
+                    // Renderizar las tareas de la fase
+                    phase.tasks.forEach(task => {
+                        const taskStartDate = new Date(task.start);
+                        const taskEndDate = new Date(task.end);
+
+                        const startOffset = (taskStartDate - startDate) / (1000 * 60 * 60 * 24);
+                        const duration = (taskEndDate - taskStartDate) / (1000 * 60 * 60 * 24) + 1;
+
+                        const left = (startOffset / totalDays) * 100;
+                        const width = (duration / totalDays) * 100;
+
+                        const taskRow = document.createElement('div');
+                        taskRow.className = 'grid gantt-grid border-b border-gray-200 hover:bg-gray-50 transition-colors';
+                        taskRow.innerHTML = `
+                            <div class="p-3 border-r border-gray-200 text-sm truncate">${task.name}</div>
+                            <div class="relative p-2">
+                                <div class="task-bar absolute h-8 ${phase.color} rounded-md cursor-pointer hover:opacity-80 transition-opacity flex items-center px-2" 
+                                     style="left: ${left}%; width: ${width}%;"
+                                     data-task='${JSON.stringify({...task, phase: phase.phase})}'>
+                                     <span class="text-white text-xs font-medium truncate hidden sm:inline">${task.name}</span>
+                                </div>
+                            </div>
+                        `;
+                        ganttContent.appendChild(taskRow);
+                    });
+                });
+            }
+
+            function renderLegend() {
+                legendContainer.innerHTML = projectData.map(phase => `
+                    <div class="flex items-center">
+                        <span class="w-4 h-4 rounded-full ${phase.color} mr-2"></span>
+                        <span class="text-sm text-gray-700">${phase.phase.split(':')[0]}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // --- MANEJO DEL MODAL ---
+            
+            function openModal(taskData) {
+                const task = JSON.parse(taskData);
+                document.getElementById('modal-title').textContent = task.name;
+                document.getElementById('modal-phase').textContent = task.phase;
+                document.getElementById('modal-description').textContent = task.description;
+                document.getElementById('modal-responsibles').textContent = task.responsibles;
+                
+                const start = new Date(task.start);
+                const end = new Date(task.end);
+                const duration = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+                document.getElementById('modal-duration').textContent = `${duration} día(s)`;
+
+                const statusEl = document.getElementById('modal-status');
+                statusEl.textContent = task.status;
+                statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium ';
+                switch(task.status.toLowerCase()) {
+                    case 'pendiente':
+                        statusEl.classList.add('bg-yellow-100', 'text-yellow-800');
+                        break;
+                    case 'en progreso':
+                        statusEl.classList.add('bg-blue-100', 'text-blue-800');
+                        break;
+                    case 'completado':
+                         statusEl.classList.add('bg-green-100', 'text-green-800');
+                         break;
+                }
+                
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.add('modal-enter-active'), 10);
+            }
+
+            function closeModal() {
+                modal.classList.remove('modal-enter-active');
+                modal.classList.add('modal-exit-active');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('modal-exit-active');
+                }, 300);
+            }
+            
+            // --- EVENT LISTENERS ---
+
+            ganttContent.addEventListener('click', (e) => {
+                const taskBar = e.target.closest('.task-bar');
+                if (taskBar) {
+                    openModal(taskBar.dataset.task);
+                }
+            });
+
+            closeModalBtn.addEventListener('click', closeModal);
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+
+            // --- INICIALIZACIÓN ---
+            renderTimeline();
+            renderLegend();
+            renderGantt();
+        });
+    </script>
+</body>
+</html>
